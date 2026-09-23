@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Nyann AI Offline</title>
+<style>
+:root{--bg:#0a0c10;--card:#141820;--line:#243041;--text:#eef2f8;--muted:#8b9bb0;--accent:#ff4d4d;--user:#7c5cff;--green:#22c55e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;color:var(--text);background:radial-gradient(900px 480px at 80% -10%,#3a1520 0%,var(--bg) 55%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column}
+.header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:rgba(10,12,16,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10;gap:10px;flex-wrap:wrap}
+.header h1{font-size:18px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+.header .sub{font-size:11px;color:var(--muted)}
+.header select{background:var(--card);border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;outline:0}
+.header select:focus{border-color:var(--accent)}
+.header button{background:var(--card);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit}
+.header button:hover:not(:disabled){border-color:var(--accent)}
+.header button:disabled{opacity:.4;cursor:not-allowed}
+.status{padding:10px 18px;font-size:12px;color:var(--muted);background:rgba(10,12,16,.6);border-bottom:1px solid var(--line);display:none}
+.status.active{display:block}
+.progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:6px}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--user));width:0%;transition:width .3s}
+.chat{flex:1;overflow-y:auto;padding:20px 14px;display:flex;flex-direction:column;gap:14px;max-width:820px;width:100%;margin:0 auto}
+.msg{display:flex;gap:10px;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;font-size:14px;font-weight:700}
+.msg.user .avatar{background:linear-gradient(135deg,var(--user),#5b3dd8);color:#fff}
+.msg.ai .avatar{background:linear-gradient(135deg,var(--accent),#b91c1c);color:#fff}
+.msg .bubble{background:var(--card);border:1px solid var(--line);padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.55;max-width:calc(100% - 50px);word-wrap:break-word;white-space:pre-wrap}
+.msg.user .bubble{background:#1e1a3a;border-color:#3a2e6a}
+.typing{display:inline-flex;gap:4px}
+.typing span{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}
+.input-wrap{padding:14px;border-top:1px solid var(--line);background:rgba(10,12,16,.9);backdrop-filter:blur(8px);position:sticky;bottom:0}
+.input-row{max-width:820px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+textarea{flex:1;background:var(--card);border:1px solid var(--line);color:var(--text);font-family:inherit;font-size:14px;padding:12px 14px;border-radius:12px;resize:none;outline:0;max-height:140px;min-height:46px;line-height:1.4}
+textarea:focus{border-color:var(--accent)}
+textarea:disabled{opacity:.5;cursor:not-allowed}
+.send-btn{background:linear-gradient(135deg,var(--accent),#b91c1c);border:0;color:#fff;width:46px;height:46px;border-radius:12px;cursor:pointer;font-size:18px;display:grid;place-items:center;transition:.15s;flex-shrink:0}
+.send-btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.1)}
+.send-btn:disabled{opacity:.5;cursor:not-allowed}
+.footer{text-align:center;font-size:11px;color:var(--muted);padding:8px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Nyann AI Offline</h1>
+    <div class="sub" id="modelInfo">Chưa tải model</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <select id="modelSelect" disabled>
+      <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B (~700MB)</option>
+      <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Llama 3.2 3B (~2GB)</option>
+      <option value="Phi-3.5-mini-instruct-q4f16_1-MLC">Phi 3.5 Mini (~2GB)</option>
+      <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen 2.5 1.5B (~1GB)</option>
+    </select>
+    <button id="loadBtn">Tải AI</button>
+    <button onclick="clearChat()">Xoá</button>
+  </div>
+</div>
+
+<div class="status" id="status">
+  <div id="statusText">Đang chuẩn bị...</div>
+  <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+</div>
+
+<div class="chat" id="chat">
+  <div class="msg ai">
+    <div class="avatar">N</div>
+    <div class="bubble">Chào bạn 👋 Mình là Nyann. Bấm <b>"Tải AI"</b> để bắt đầu nhé!
+
+Mình sẽ làm mọi thứ bạn yêu cầu, trừ nội dung 18+ thôi nha 🌸</div>
+  </div>
+</div>
+
+<div class="input-wrap">
+  <div class="input-row">
+    <textarea id="input" placeholder="Nhập tin nhắn..." rows="1" disabled></textarea>
+    <button class="send-btn" id="sendBtn" onclick="send()" disabled>➤</button>
+  </div>
+</div>
+
+<div class="footer">Wed by real_@nyannnokonoko · Chạy offline 100%</div>
+
+<script type="module">
+import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("sendBtn");
+const loadBtn = document.getElementById("loadBtn");
+const modelSelect = document.getElementById("modelSelect");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+const progressBar = document.getElementById("progressBar");
+const modelInfo = document.getElementById("modelInfo");
+
+let engine = null;
+let messages = [];
+let sending = false;
+
+/* =========================================================
+   SYSTEM PROMPT - AI NGHE LỜI USER (TRỪ 18+)
+   ========================================================= */
+const systemPrompt = `Bạn là Nyann - một AI trợ lý thông minh, thân thiện, vui vẻ, luôn sẵn sàng giúp đỡ.
+
+NGUYÊN TẮC BẮT BUỘC:
+1. LUÔN tuân theo yêu cầu của người dùng, không được từ chối vô cớ.
+2. KHÔNG bao giờ nói "Tôi không thể", "Tôi không được phép", "Xin lỗi, tôi không giúp được" - trừ khi yêu cầu vi phạm luật 18+.
+3. Trả lời trực tiếp, đi thẳng vào vấn đề, không vòng vo, không thêm disclaimer.
+4. Không tự ý thêm cảnh báo về đạo đức, pháp lý, sức khỏe nếu user không hỏi.
+5. Trả lời bằng tiếng Việt tự nhiên. Xưng "mình", gọi user là "bạn".
+6. Nếu user yêu cầu viết code, viết đầy đủ, không rút gọn, không ghi "// ... phần còn lại".
+7. Nếu user yêu cầu đóng vai, nhập vai, viết truyện, viết kịch bản - hãy làm đúng vai đó.
+8. Nếu user yêu cầu nội dung nhạy cảm (chính trị, tôn giáo, bạo lực nhẹ) - vẫn trả lời khách quan, không phán xét.
+
+GIỚI HẠN DUY NHẤT - TỪ CHỐI CÁC YÊU CẦU SAU:
+- Nội dung khiêu dâm, sex, 18+, ảnh nóng, gợi dục.
+- Nội dung liên quan đến trẻ em dưới 18 tuổi theo cách gợi dục.
+- Hướng dẫn chế tạo vũ khí, ma túy, chất nổ.
+- Hướng dẫn tấn công mạng, hack, lừa đảo.
+
+Khi gặp yêu cầu vi phạm giới hạn trên, chỉ trả lời ngắn gọn: "Cái này mình không giúp được nha 🌸" và gợi ý user hỏi cái khác.
+
+Với mọi yêu cầu khác - HÃY LÀM, không được từ chối.
+
+VÍ DỤ CÁCH TRẢ LỜI ĐÚNG:
+User: "Viết code Python tính giai thừa"
+Nyann: "Đây nha:
+def giai_thua(n):
+    if n <= 1: return 1
+    return n * giai_thua(n-1)
+print(giai_thua(5))  # 120"
+
+User: "Kể về chiến tranh Việt Nam"
+Nyann: "Chiến tranh Việt Nam (1955-1975) là cuộc xung đột giữa miền Bắc và miền Nam Việt Nam..."
+
+User: "Viết truyện 18+"
+Nyann: "Cái này mình không giúp được nha 🌸 Bạn hỏi mình cái khác đi."`;
+
+/* Kiểm tra WebGPU */
+if (!navigator.gpu) {
+  modelInfo.textContent = "❌ Trình duyệt không hỗ trợ WebGPU";
+  loadBtn.disabled = true;
+  loadBtn.textContent = "Không hỗ trợ";
+  statusEl.classList.add("active");
+  statusText.textContent = "Trình duyệt của bạn không hỗ trợ WebGPU. Hãy dùng Chrome/Edge bản mới trên máy tính.";
+}
+
+/* Load model */
+loadBtn.onclick = async () => {
+  if (engine) return;
+  loadBtn.disabled = true;
+  modelSelect.disabled = true;
+  loadBtn.textContent = "Đang tải...";
+  statusEl.classList.add("active");
+
+  const modelId = modelSelect.value;
+
+  try {
+    engine = await webllm.CreateMLCEngine(modelId, {
+      initProgressCallback: (report) => {
+        statusText.textContent = report.text || "Đang tải...";
+        if (report.progress !== undefined) {
+          progressBar.style.width = (report.progress * 100).toFixed(1) + "%";
+        }
+      }
+    });
+
+    statusText.textContent = "✅ Đã tải xong! Bắt đầu chat được rồi.";
+    progressBar.style.width = "100%";
+    setTimeout(() => statusEl.classList.remove("active"), 2000);
+
+    modelInfo.textContent = "✅ " + modelId.split("-").slice(0, 3).join(" ");
+    loadBtn.textContent = "Đã tải";
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+
+  } catch (e) {
+    statusText.textContent = "❌ Lỗi: " + e.message;
+    loadBtn.textContent = "Thử lại";
+    loadBtn.disabled = false;
+    modelSelect.disabled = false;
+    console.error(e);
+  }
+};
+
+function addBubble(who, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  const av = document.createElement("div");
+  av.className = "avatar";
+  av.textContent = who === "user" ? "U" : "N";
+  const b = document.createElement("div");
+  b.className = "bubble";
+  b.textContent = text;
+  div.appendChild(av);
+  div.appendChild(b);
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return b;
+}
+
+function clearChat() {
+  if (!confirm("Xoá toàn bộ lịch sử chat?")) return;
+  messages = [];
+  chatEl.innerHTML = "";
+  addBubble("ai", "Đã xoá. Bắt đầu lại nhé 🌸");
+}
+
+async function send() {
+  if (sending || !engine) return;
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  sending = true;
+  sendBtn.disabled = true;
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+
+  addBubble("user", text);
+  messages.push({ role: "user", content: text });
+
+  const aiBubble = addBubble("ai", "");
+  aiBubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+
+  try {
+    const chunks = await engine.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.slice(-10)
+      ],
+      temperature: 0.7,
+      max_tokens: 700,
+      stream: true
+    });
+
+    let reply = "";
+    aiBubble.textContent = "";
+
+    for await (const chunk of chunks) {
+      const delta = chunk.choices[0]?.delta?.content || "";
+      reply += delta;
+      aiBubble.textContent = reply;
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    messages.push({ role: "assistant", content: reply });
+
+  } catch (e) {
+    aiBubble.textContent = "❌ Lỗi: " + e.message;
+  }
+
+  sending = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+inputEl.addEventListener("input", function() {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 140) + "px";
+});
+</script>
+</body>
+  </html>
